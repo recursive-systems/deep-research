@@ -11,6 +11,12 @@ const state = {
   pollTimer: null,
 };
 
+const PROVIDER_DEFAULT_MODELS = {
+  claude: 'sonnet',
+  codex: 'gpt-5.4',
+  zai: 'zai/glm-5',
+};
+
 // ===== Helpers =====
 function $(id) { return document.getElementById(id); }
 
@@ -76,6 +82,29 @@ function parseOptionalInt(value) {
   if (!trimmed) return null;
   const parsed = Number.parseInt(trimmed, 10);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function defaultModelFor(provider) {
+  return PROVIDER_DEFAULT_MODELS[provider] || '';
+}
+
+function syncModelInput(providerSelectId, modelInputId, { forceDefault = false } = {}) {
+  const providerSelect = $(providerSelectId);
+  const modelInput = $(modelInputId);
+  if (!providerSelect || !modelInput) return;
+
+  const previousProvider = modelInput.dataset.provider || providerSelect.value || 'claude';
+  const nextProvider = providerSelect.value || 'claude';
+  const previousDefault = defaultModelFor(previousProvider);
+  const nextDefault = defaultModelFor(nextProvider);
+  const currentValue = modelInput.value.trim();
+
+  if (forceDefault || !currentValue || currentValue === previousDefault) {
+    modelInput.value = nextDefault;
+  }
+
+  modelInput.placeholder = nextDefault ? `auto (${nextDefault})` : 'auto';
+  modelInput.dataset.provider = nextProvider;
 }
 
 function isActive(run) { return run.status === 'running' || run.status === 'queued'; }
@@ -446,11 +475,13 @@ function openRerunModal(topicSlug, baseRun) {
   $('rerunModel').value = baseRun?.model || '';
   $('rerunIterations').value = baseRun?.requestedIterations ?? '';
   $('rerunMaxMinutes').value = baseRun?.maxMinutes ?? '';
+  syncModelInput('rerunProvider', 'rerunModel', { forceDefault: !$('rerunModel').value.trim() });
 }
 
 function closeRerunModal() {
   $('rerunModal').classList.add('hidden');
   $('rerunForm').reset();
+  syncModelInput('rerunProvider', 'rerunModel', { forceDefault: true });
 }
 
 async function onRerunSubmit(e) {
@@ -480,8 +511,15 @@ async function onRerunSubmit(e) {
 }
 
 // ===== New Research Modal =====
-function openNewModal() { $('modal').classList.remove('hidden'); }
-function closeNewModal() { $('modal').classList.add('hidden'); $('newForm').reset(); }
+function openNewModal() {
+  $('modal').classList.remove('hidden');
+  syncModelInput('newProvider', 'newModel', { forceDefault: !$('newModel').value.trim() });
+}
+function closeNewModal() {
+  $('modal').classList.add('hidden');
+  $('newForm').reset();
+  syncModelInput('newProvider', 'newModel', { forceDefault: true });
+}
 
 async function onNewSubmit(e) {
   e.preventDefault();
@@ -524,13 +562,18 @@ async function main() {
   $('modalCancelBtn').addEventListener('click', closeNewModal);
   $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeNewModal(); });
   $('newForm').addEventListener('submit', onNewSubmit);
+  $('newProvider').addEventListener('change', () => syncModelInput('newProvider', 'newModel'));
 
   $('rerunModalCloseBtn').addEventListener('click', closeRerunModal);
   $('rerunCancelBtn').addEventListener('click', closeRerunModal);
   $('rerunModal').addEventListener('click', (e) => { if (e.target === $('rerunModal')) closeRerunModal(); });
   $('rerunForm').addEventListener('submit', onRerunSubmit);
+  $('rerunProvider').addEventListener('change', () => syncModelInput('rerunProvider', 'rerunModel'));
 
   $('refreshBtn').addEventListener('click', () => refresh());
+
+  syncModelInput('newProvider', 'newModel', { forceDefault: true });
+  syncModelInput('rerunProvider', 'rerunModel', { forceDefault: true });
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {

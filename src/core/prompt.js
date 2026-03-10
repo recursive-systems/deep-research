@@ -17,15 +17,17 @@ export async function loadPromptTemplates() {
   };
 }
 
-export function materializeIterationPrompt(template, { iteration, totalIterations, outputDir }) {
+export function materializeIterationPrompt(template, { iteration, totalIterations, topicIteration, outputDir }) {
   const padded = String(iteration).padStart(3, '0');
+  const isFinalIteration = totalIterations != null && iteration === totalIterations;
   let prompt = template
     .replaceAll('{{ITERATION}}', String(iteration))
     .replaceAll('{{ITERATION_PADDED}}', padded)
-    .replaceAll('{{TOTAL_ITERATIONS}}', String(totalIterations))
+    .replaceAll('{{TOTAL_ITERATIONS}}', totalIterations == null ? 'open-ended' : String(totalIterations))
+    .replaceAll('{{TOPIC_ITERATION}}', String(topicIteration))
     .replaceAll('{{OUTPUT_DIR}}', outputDir);
 
-  if (iteration === totalIterations) {
+  if (isFinalIteration) {
     prompt = prompt
       .replaceAll('{{#if FINAL_ITERATION}}', '')
       .replaceAll('{{/if}}', '');

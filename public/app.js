@@ -43,8 +43,39 @@ function fmtDuration(run) {
 }
 
 function pct(run) {
+  if (run.requestedIterations == null) return null;
   const t = Math.max(run.requestedIterations || 0, 1);
   return Math.max(0, Math.min(100, Math.round(((run.completedIterations || 0) / t) * 100)));
+}
+
+function fmtIterations(run) {
+  return run.requestedIterations == null
+    ? `${run.completedIterations} / open-ended`
+    : `${run.completedIterations} / ${run.requestedIterations}`;
+}
+
+function fmtTimeout(run) {
+  return run.maxMinutes == null ? 'none' : `${run.maxMinutes} min`;
+}
+
+function topicIterationOffset(run) {
+  return Number(run.topicIterationOffset || 0);
+}
+
+function fmtTopicIterations(run) {
+  const offset = topicIterationOffset(run);
+  const current = offset + Number(run.completedIterations || 0);
+  if (run.requestedIterations == null) {
+    return `${current} / open-ended`;
+  }
+  return `${current} / ${offset + run.requestedIterations}`;
+}
+
+function parseOptionalInt(value) {
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function isActive(run) { return run.status === 'running' || run.status === 'queued'; }
@@ -167,10 +198,11 @@ function renderResearchList() {
         ${latest ? statusHtml(latest.status) : '<span class="status"><span class="dot"></span>no runs</span>'}
         <span class="tag">${topicRuns.length} run${topicRuns.length !== 1 ? 's' : ''}</span>
         ${latest ? `<span class="tag">${latest.provider}</span>` : ''}
+        ${latest ? `<span class="tag">topic ${fmtTopicIterations(latest)}</span>` : ''}
         ${latest ? `<span class="tag">${fmtDuration(latest)}</span>` : ''}
       </div>
       ${latest?.summary?.lastAgentLine ? `<div class="research-card__agent">${esc(latest.summary.lastAgentLine)}</div>` : ''}
-      ${latest ? `<div class="research-card__progress"><div class="research-card__progress-fill${running ? ' running' : ''}" style="width:${p}%"></div></div>` : ''}
+      ${latest && p != null ? `<div class="research-card__progress"><div class="research-card__progress-fill${running ? ' running' : ''}" style="width:${p}%"></div></div>` : ''}
     `;
 
     // Hover actions
@@ -301,7 +333,7 @@ function renderDetail() {
         const time = r.startedAt ? new Date(r.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
         const opt = document.createElement('option');
         opt.value = r.id;
-        opt.textContent = `${label} — ${r.status} — ${r.provider} — ${date} ${time} — ${fmtDuration(r)}`;
+        opt.textContent = `${label} — ${r.status} — ${r.provider} — topic ${fmtTopicIterations(r)} — ${date} ${time} — ${fmtDuration(r)}`;
         if (r.id === state.selectedRunId) opt.selected = true;
         select.appendChild(opt);
       }
@@ -324,7 +356,9 @@ async function fillRunDetail(run) {
   // Meta grid
   $('detailMeta').innerHTML = `
     <div class="detail-cell"><div class="detail-cell__label">Status</div><div class="detail-cell__value">${statusHtml(run.status)}</div></div>
-    <div class="detail-cell"><div class="detail-cell__label">Iterations</div><div class="detail-cell__value">${run.completedIterations} / ${run.requestedIterations}</div></div>
+    <div class="detail-cell"><div class="detail-cell__label">Iterations</div><div class="detail-cell__value">${fmtIterations(run)}</div></div>
+    <div class="detail-cell"><div class="detail-cell__label">Topic Iterations</div><div class="detail-cell__value">${fmtTopicIterations(run)}</div></div>
+    <div class="detail-cell"><div class="detail-cell__label">Timeout</div><div class="detail-cell__value">${fmtTimeout(run)}</div></div>
     <div class="detail-cell"><div class="detail-cell__label">Provider</div><div class="detail-cell__value">${run.provider}</div></div>
     <div class="detail-cell"><div class="detail-cell__label">Model</div><div class="detail-cell__value">${run.model || 'default'}</div></div>
     <div class="detail-cell"><div class="detail-cell__label">Started</div><div class="detail-cell__value">${fmtDate(run.startedAt)}</div></div>
@@ -410,8 +444,8 @@ function openRerunModal(topicSlug, baseRun) {
   $('rerunBaseRunId').value = baseRun?.id || '';
   $('rerunProvider').value = baseRun?.provider || 'claude';
   $('rerunModel').value = baseRun?.model || '';
-  $('rerunIterations').value = baseRun?.requestedIterations || 1;
-  $('rerunMaxMinutes').value = baseRun?.maxMinutes || 0;
+  $('rerunIterations').value = baseRun?.requestedIterations ?? '';
+  $('rerunMaxMinutes').value = baseRun?.maxMinutes ?? '';
 }
 
 function closeRerunModal() {
@@ -431,8 +465,8 @@ async function onRerunSubmit(e) {
         topicSlug: $('rerunTopicSlug').value,
         provider: $('rerunProvider').value,
         model: $('rerunModel').value,
-        iterations: parseInt($('rerunIterations').value, 10) || 1,
-        maxMinutes: parseInt($('rerunMaxMinutes').value, 10) || 0,
+        iterations: parseOptionalInt($('rerunIterations').value),
+        maxMinutes: parseOptionalInt($('rerunMaxMinutes').value),
         baseRunId: $('rerunBaseRunId').value || null,
       }),
     });
@@ -461,8 +495,8 @@ async function onNewSubmit(e) {
         brief: $('newBrief').value,
         provider: $('newProvider').value,
         model: $('newModel').value,
-        iterations: parseInt($('newIterations').value, 10) || 1,
-        maxMinutes: parseInt($('newMaxMinutes').value, 10) || 0,
+        iterations: parseOptionalInt($('newIterations').value),
+        maxMinutes: parseOptionalInt($('newMaxMinutes').value),
       }),
     });
     closeNewModal();

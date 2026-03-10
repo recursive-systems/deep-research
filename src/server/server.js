@@ -58,9 +58,18 @@ function parseBody(req) {
   });
 }
 
-function normalizeNumber(value, fallback) {
-  const parsed = Number.parseInt(String(value ?? fallback), 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
+function normalizeOptionalNumber(value, { min, name }) {
+  if (value == null || String(value).trim() === '') {
+    return null;
+  }
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid ${name}: ${value}`);
+  }
+  if (parsed < min) {
+    throw new Error(`${name} must be at least ${min}`);
+  }
+  return parsed;
 }
 
 function summarizeLogs(logs) {
@@ -136,8 +145,8 @@ async function handleApi(req, res, url) {
         topicSlug: topic.slug,
         provider: body.provider || 'claude',
         model: body.model || '',
-        iterations: normalizeNumber(body.iterations, 1),
-        maxMinutes: normalizeNumber(body.maxMinutes, 0),
+        iterations: normalizeOptionalNumber(body.iterations, { min: 1, name: 'iterations' }),
+        maxMinutes: normalizeOptionalNumber(body.maxMinutes, { min: 1, name: 'maxMinutes' }),
         baseRunId: null,
       });
       const launched = await launchRunDetached(run.id);
@@ -155,8 +164,8 @@ async function handleApi(req, res, url) {
         topicSlug: body.topicSlug,
         provider: body.provider || 'claude',
         model: body.model || '',
-        iterations: normalizeNumber(body.iterations, 1),
-        maxMinutes: normalizeNumber(body.maxMinutes, 0),
+        iterations: normalizeOptionalNumber(body.iterations, { min: 1, name: 'iterations' }),
+        maxMinutes: normalizeOptionalNumber(body.maxMinutes, { min: 1, name: 'maxMinutes' }),
         baseRunId: body.baseRunId || null,
       });
       const launched = await launchRunDetached(run.id);

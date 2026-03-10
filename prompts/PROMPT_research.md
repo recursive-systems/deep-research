@@ -1,5 +1,7 @@
 You are on iteration **{{ITERATION}}** of **{{TOTAL_ITERATIONS}}** in this run.
 
+This is overall topic iteration **{{TOPIC_ITERATION}}** across all runs for this topic.
+
 Your run directory is: `{{OUTPUT_DIR}}`
 
 Your iteration log file for this iteration is: `{{OUTPUT_DIR}}/iterations/{{ITERATION_PADDED}}.md`

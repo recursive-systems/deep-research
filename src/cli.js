@@ -61,12 +61,32 @@ function printJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-function normalizeNumber(value, fallback) {
-  const parsed = Number.parseInt(String(value ?? fallback), 10);
+function normalizeOptionalNumber(value, { min, name }) {
+  if (value == null || String(value).trim() === '') {
+    return null;
+  }
+  const parsed = Number.parseInt(String(value), 10);
   if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid numeric value: ${value}`);
+    throw new Error(`Invalid ${name}: ${value}`);
+  }
+  if (parsed < min) {
+    throw new Error(`${name} must be at least ${min}`);
   }
   return parsed;
+}
+
+function formatIterations(run) {
+  return run.requestedIterations == null
+    ? `${run.completedIterations}/open-ended`
+    : `${run.completedIterations}/${run.requestedIterations}`;
+}
+
+function formatTopicIterations(run) {
+  const offset = Number(run.topicIterationOffset || 0);
+  const current = offset + Number(run.completedIterations || 0);
+  return run.requestedIterations == null
+    ? `${current}/open-ended`
+    : `${current}/${offset + run.requestedIterations}`;
 }
 
 async function readBrief(flags) {
@@ -108,8 +128,8 @@ async function runLaunch(topicSlug, flags, { baseRunId = null } = {}) {
     topicSlug,
     provider: flags.provider || 'claude',
     model: flags.model || '',
-    iterations: normalizeNumber(flags.iterations, 1),
-    maxMinutes: normalizeNumber(flags['max-minutes'], 0),
+    iterations: normalizeOptionalNumber(flags.iterations, { min: 1, name: 'iterations' }),
+    maxMinutes: normalizeOptionalNumber(flags['max-minutes'], { min: 1, name: 'max-minutes' }),
     baseRunId,
   });
 
@@ -140,8 +160,8 @@ async function runStart(flags) {
     topicSlug: topic.slug,
     provider: flags.provider || 'claude',
     model: flags.model || '',
-    iterations: normalizeNumber(flags.iterations, 1),
-    maxMinutes: normalizeNumber(flags['max-minutes'], 0),
+    iterations: normalizeOptionalNumber(flags.iterations, { min: 1, name: 'iterations' }),
+    maxMinutes: normalizeOptionalNumber(flags['max-minutes'], { min: 1, name: 'max-minutes' }),
     baseRunId: null,
   });
 
@@ -180,7 +200,7 @@ async function runList(flags) {
     return;
   }
   for (const run of runs) {
-    process.stdout.write(`${run.id}\t${run.topicSlug}\t${run.status}\t${run.completedIterations}/${run.requestedIterations}\n`);
+    process.stdout.write(`${run.id}\t${run.topicSlug}\t${run.status}\t${formatIterations(run)}\ttopic=${formatTopicIterations(run)}\n`);
   }
 }
 
@@ -196,7 +216,7 @@ async function runStatus(positionals, flags) {
       return;
     }
     process.stdout.write(`${run.id}\n`);
-    process.stdout.write(`topic: ${run.topicSlug}\nstatus: ${run.status}\niterations: ${run.completedIterations}/${run.requestedIterations}\nprovider: ${run.provider}\nmodel: ${run.model || '-'}\n`);
+    process.stdout.write(`topic: ${run.topicSlug}\nstatus: ${run.status}\niterations: ${formatIterations(run)}\ntopicIterations: ${formatTopicIterations(run)}\nprovider: ${run.provider}\nmodel: ${run.model || '-'}\n`);
     return;
   }
 

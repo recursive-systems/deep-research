@@ -56,6 +56,27 @@ function normalizeProvider(value) {
   return provider;
 }
 
+function normalizeRunConstraints({ iterations, maxMinutes }) {
+  const normalizedIterations = iterations == null || iterations === ''
+    ? null
+    : Number(iterations);
+  const normalizedMaxMinutes = maxMinutes == null || maxMinutes === ''
+    ? null
+    : Number(maxMinutes);
+
+  if (normalizedIterations != null && (!Number.isInteger(normalizedIterations) || normalizedIterations < 1)) {
+    throw new Error(`Invalid iterations: ${iterations}`);
+  }
+  if (normalizedMaxMinutes != null && (!Number.isInteger(normalizedMaxMinutes) || normalizedMaxMinutes < 1)) {
+    throw new Error(`Invalid maxMinutes: ${maxMinutes}`);
+  }
+
+  return {
+    iterations: normalizedIterations,
+    maxMinutes: normalizedMaxMinutes,
+  };
+}
+
 function makeRunId() {
   const stamp = nowIso().replace(/[:.]/g, '-');
   const suffix = crypto.randomBytes(3).toString('hex');
@@ -100,6 +121,23 @@ async function listDirectories(root) {
 async function findLatestExistingRunForTopic(topicSlug, env = process.env) {
   const runs = await listRunsForTopic(topicSlug, env);
   return runs[0] || null;
+}
+
+async function getRunTopicIterationOffset(run, env = process.env) {
+  if (!run) {
+    return 0;
+  }
+  if (Number.isInteger(run.topicIterationOffset) && run.topicIterationOffset >= 0) {
+    return run.topicIterationOffset;
+  }
+  if (!run.baseRunId) {
+    return 0;
+  }
+  const baseRun = await readRun(run.baseRunId, env);
+  if (!baseRun) {
+    return 0;
+  }
+  return (await getRunTopicIterationOffset(baseRun, env)) + Number(baseRun.completedIterations || 0);
 }
 
 async function copyStateFromBaseRun(baseRun, targetRunDir) {
@@ -292,6 +330,10 @@ export async function createRun({
   const createdAt = nowIso();
   const normalizedProvider = normalizeProvider(provider);
   const normalizedModel = String(model || PROVIDER_DEFAULT_MODELS[normalizedProvider] || '').trim();
+  const constraints = normalizeRunConstraints({ iterations, maxMinutes });
+  const topicIterationOffset = baseRun
+    ? (await getRunTopicIterationOffset(baseRun, env)) + Number(baseRun.completedIterations || 0)
+    : 0;
   const run = {
     id: runId,
     topicSlug: topic.slug,
@@ -299,9 +341,9 @@ export async function createRun({
     status: 'created',
     provider: normalizedProvider,
     model: normalizedModel,
-    requestedIterations: Number(iterations || 1),
+    requestedIterations: constraints.iterations,
     completedIterations: 0,
-    maxMinutes: Number(maxMinutes || 0),
+    maxMinutes: constraints.maxMinutes,
     createdAt,
     updatedAt: createdAt,
     startedAt: null,
@@ -310,6 +352,7 @@ export async function createRun({
     exitCode: null,
     error: null,
     baseRunId: baseRun?.id || null,
+    topicIterationOffset,
     runDir,
     logFile: path.join(runDir, 'stdout.log'),
     eventsFile: path.join(runDir, 'events.ndjson'),

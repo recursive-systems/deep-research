@@ -47,6 +47,14 @@ async function createLogger(logFile) {
   };
 }
 
+function describeIterations(run) {
+  return run.requestedIterations == null ? 'open-ended' : String(run.requestedIterations);
+}
+
+function topicIterationFor(run, localIteration) {
+  return Number(run.topicIterationOffset || 0) + localIteration;
+}
+
 async function executeRun(runId) {
   let run = await readRun(runId);
   if (!run) {
@@ -84,14 +92,15 @@ async function executeRun(runId) {
 
     await appendRunEvent(runId, 'run.started', { pid: process.pid });
     await logger.write(`[run] ${runId} started for topic ${activeState.topicSlug}`);
-    await logger.write(`[run] provider=${activeState.provider} model=${activeState.model || 'default'} iterations=${activeState.requestedIterations}`);
+    await logger.write(`[run] provider=${activeState.provider} model=${activeState.model || 'default'} iterations=${describeIterations(activeState)} timeout=${activeState.maxMinutes == null ? 'none' : `${activeState.maxMinutes}m`} topic-iteration-offset=${activeState.topicIterationOffset || 0}`);
 
     const startTime = Date.now();
     let hardTimeoutTimer = null;
+    const hasIterationLimit = activeState.requestedIterations != null;
 
     function startHardTimeout() {
       clearTimeout(hardTimeoutTimer);
-      if (activeState.maxMinutes > 0) {
+      if (activeState.maxMinutes != null) {
         const remainingMs = Math.max(0, (activeState.maxMinutes * 60000) - (Date.now() - startTime));
         hardTimeoutTimer = setTimeout(() => {
           logger.write(`[run] hard timeout reached (${activeState.maxMinutes} min), aborting`);
@@ -102,12 +111,12 @@ async function executeRun(runId) {
       }
     }
 
-    for (let iteration = completedIterations + 1; iteration <= activeState.requestedIterations; iteration += 1) {
+    for (let iteration = completedIterations + 1; !hasIterationLimit || iteration <= activeState.requestedIterations; iteration += 1) {
       if (stopRequested) {
         break;
       }
 
-      if (activeState.maxMinutes > 0) {
+      if (activeState.maxMinutes != null) {
         const elapsedMinutes = (Date.now() - startTime) / 60000;
         if (elapsedMinutes >= activeState.maxMinutes) {
           await logger.write(`[run] time limit reached after ${activeState.maxMinutes} minute(s)`);
@@ -120,13 +129,17 @@ async function executeRun(runId) {
       const taskPrompt = materializeIterationPrompt(templates.prompt, {
         iteration,
         totalIterations: activeState.requestedIterations,
+        topicIteration: topicIterationFor(activeState, iteration),
         outputDir: activeState.runDir,
       });
       const fullPrompt = combineSystemAndTaskPrompt(templates.agents, taskPrompt);
 
       await fs.writeFile(path.join(activeState.runDir, `prompt-${String(iteration).padStart(3, '0')}.md`), `${fullPrompt}\n`, 'utf8');
-      await appendRunEvent(runId, 'iteration.started', { iteration });
-      await logger.write(`[run] starting iteration ${iteration}/${activeState.requestedIterations}`);
+      await appendRunEvent(runId, 'iteration.started', {
+        iteration,
+        topicIteration: topicIterationFor(activeState, iteration),
+      });
+      await logger.write(`[run] starting iteration ${hasIterationLimit ? `${iteration}/${activeState.requestedIterations}` : String(iteration)}`);
 
       startHardTimeout();
 
@@ -147,8 +160,11 @@ async function executeRun(runId) {
       activeState = await updateRun(runId, (current) => ({
         completedIterations: Math.max(current.completedIterations || 0, iteration),
       }));
-      await appendRunEvent(runId, 'iteration.completed', { iteration });
-      await logger.write(`[run] completed iteration ${iteration}/${activeState.requestedIterations}`);
+      await appendRunEvent(runId, 'iteration.completed', {
+        iteration,
+        topicIteration: topicIterationFor(activeState, iteration),
+      });
+      await logger.write(`[run] completed iteration ${hasIterationLimit ? `${iteration}/${activeState.requestedIterations}` : String(iteration)}`);
     }
 
     const endedAt = new Date().toISOString();

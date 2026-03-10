@@ -1,0 +1,26 @@
+{
+  "name": "@recursive-systems/deep-research",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone deep research CLI and dashboard",
+  "bin": {
+    "deep-research": "./src/cli.js"
+  },
+  "scripts": {
+    "check": "node --check src/cli.js && node --check src/core/acp-runner.js && node --check src/core/config.js && node --check src/core/launcher.js && node --check src/core/prompt.js && node --check src/core/store.js && node --check src/core/worker.js && node --check src/server/server.js && node --check public/app.js && node --check smoke-test.mjs",
+    "smoke": "node smoke-test.mjs",
+    "smoke:claude": "node smoke-test.mjs --provider claude",
+    "smoke:codex": "node smoke-test.mjs --provider codex",
+    "smoke:zai": "node smoke-test.mjs --provider zai",
+    "smoke:all": "node smoke-test.mjs --provider all",
+    "start": "node src/server/server.js",
+    "serve": "node src/server/server.js"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^0.15.0",
+    "@zed-industries/claude-agent-acp": "^0.21.0",
+    "@zed-industries/codex-acp": "^0.9.5",
+    "opencode-ai": "^1.2.24"
+  }
+}

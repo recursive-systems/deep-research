@@ -348,9 +348,13 @@ export async function runAcpIteration({
         reject(abortError);
       };
     });
+    // Strip CLAUDECODE env var so the spawned Claude Code subprocess doesn't
+    // refuse to start with "cannot be launched inside another Claude Code session".
+    const baseEnv = agentCommand.env || process.env;
+    const { CLAUDECODE: _, ...childEnv } = baseEnv;
     const child = spawn(agentCommand.command, agentCommand.args, {
       cwd: PACKAGE_ROOT,
-      env: agentCommand.env || process.env,
+      env: childEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     forwardStderr(child.stderr, log);

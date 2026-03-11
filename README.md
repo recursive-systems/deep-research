@@ -97,3 +97,11 @@ The generated OpenCode config:
 - checks `report.md`, `sources.md`, `iterations/001.md`, and a provider-specific `library/*.md`
 
 For `npm run smoke:zai`, `ZAI_API_KEY` must be set.
+
+## License
+
+Apache 2.0 — see [LICENSE](LICENSE).
+
+## Contact
+
+contact@recursivesystems.dev

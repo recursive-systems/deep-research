@@ -8,6 +8,13 @@ export default [
   js.configs.recommended,
   prettierConfig,
   {
+    rules: {
+      // Prevent silent error swallowing. Every catch block must have a body.
+      // Use `catch (_err) { /* intentionally ignored: <reason> */ }` for deliberate no-ops.
+      'no-empty': ['error', { allowEmptyCatch: false }],
+    },
+  },
+  {
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

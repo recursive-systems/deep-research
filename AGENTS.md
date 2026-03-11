@@ -95,6 +95,31 @@ See `ARCHITECTURE.md` for the full dependency graph and data model.
 1. Add the command handler in `src/cli.js` following the existing if-chain pattern.
 2. Use store functions for data access; add `--json` output support for machine-readable output.
 
+## Error handling — no silent catch blocks
+
+**Never write empty `catch {}` or `.catch(() => {})`**. This was the #1 agent misbehavior observed during development — 17 instances found in a single review pass. Empty catches mask real errors (EACCES, EIO, EMFILE) as silent no-ops.
+
+**Required pattern:**
+```js
+// Good — log the error
+} catch (err) {
+  console.error(`[module] Failed to do X: ${err.message}`);
+}
+
+// Good — only silence specific expected errors
+} catch (err) {
+  if (err?.code !== 'ENOENT') throw err;
+  // ENOENT is expected when file hasn't been created yet
+}
+
+// Good — deliberate no-op with explanation
+} catch (_err) {
+  // Intentionally ignored: cleanup failure is non-critical
+}
+```
+
+**Enforced by:** ESLint `no-empty` rule (error level, `allowEmptyCatch: false`). `npm run lint` will fail on empty catch blocks.
+
 ## What NOT to do
 
 - **Do not add a build step for the frontend.** The dashboard uses native ES module imports from a CDN. No webpack, vite, or babel. Edit a `.js` file and refresh the browser. See ADR-3 in `DECISIONS.md`.

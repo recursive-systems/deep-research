@@ -1,102 +1,243 @@
 # Deep Research
 
-Standalone deep research engine for iterative topic work, with a file-backed CLI and local dashboard.
+Iterative deep research engine that spawns AI agents in a loop, progressively building a research report. Each iteration reads the current state, researches further, and improves the report — with an evaluation judge scoring quality after every pass.
 
-## Runtime data
-
-By default, runtime state is stored in `~/.deep-research`.
-
-Override it with:
-
-```bash
-export DEEP_RESEARCH_HOME=/path/to/runtime
-```
+Supports multiple providers (Claude, Codex, Z.AI). Includes a CLI, REST API, and web dashboard with live updates.
 
 ## Install
 
 ```bash
-cd tools/deep-research
+git clone https://github.com/recursive-systems/deep-research.git
+cd deep-research
 npm install
 ```
 
-## CLI
+**Requirements:** Node.js 18+
+
+## Quick Start
+
+### Option A: Dashboard (recommended)
 
 ```bash
-# Create a topic
-node src/cli.js topic create --brief "AI UI Research: Research the latest patterns for AI-generated UI systems."
-
-# Run one iteration attached
-node src/cli.js run ai-ui --provider codex --iterations 1
-
-# Run in the background
-node src/cli.js run ai-ui --provider claude --iterations 3 --detach
-
-# Run with Z.AI via OpenCode ACP
-ZAI_API_KEY=... node src/cli.js run ai-ui --provider zai --iterations 1 --detach
-
-# Resume from a previous run snapshot
-node src/cli.js resume run-... --iterations 2 --detach
-
-# Inspect state
-node src/cli.js list
-node src/cli.js status run-...
-node src/cli.js logs run-... --follow
-
-# Stop or delete
-node src/cli.js stop run-...
-node src/cli.js delete run-...
-
-# Provider smoke tests
-npm run smoke:codex
-npm run smoke:claude
-npm run smoke:zai
-npm run smoke:all
+npm run serve
 ```
+
+Open [http://127.0.0.1:4310](http://127.0.0.1:4310), click **New Research**, enter a brief, pick a provider, and set iterations. The dashboard handles everything — creating topics, launching runs, live log streaming, evaluation scores, and reading results. No CLI needed.
+
+### Option B: CLI
+
+```bash
+# One-shot: create topic + start run
+node src/cli.js start --brief "Research the latest advances in autonomous agent architectures" \
+  --provider claude --iterations 3 --detach
+
+# Check progress
+node src/cli.js list
+node src/cli.js logs <run-id> --follow
+
+# Read the report
+cat ~/.deep-research/runs/<run-id>/report.md
+```
+
+## Providers
+
+Each provider uses the [Agent Client Protocol (ACP)](https://github.com/anthropics/agent-client-protocol) over stdio. Claude and Codex adapters are included as npm dependencies. Z.AI requires a separate install.
+
+| Provider | Flag | Adapter | Default Model | Setup |
+|---|---|---|---|---|
+| Claude | `--provider claude` | `claude-agent-acp` | `sonnet` | Included via npm |
+| Codex | `--provider codex` | `codex-acp` | `gpt-5.4` | Included via npm |
+| Z.AI | `--provider zai` | `opencode` | `zai/glm-5` | Install `opencode` separately, set `ZAI_API_KEY` |
+
+### Z.AI setup
+
+```bash
+# Install opencode (must be on PATH)
+# See https://opencode.ai for installation
+
+# Set your API key
+export ZAI_API_KEY=your-key-here
+
+# Run
+node src/cli.js start --brief "..." --provider zai --iterations 3 --detach
+```
+
+The Z.AI provider generates a temporary OpenCode config pinned to `https://api.z.ai/api/coding/paas/v4`. Override the model with `DEEP_RESEARCH_MODEL`.
+
+## CLI Reference
+
+```bash
+node src/cli.js <command> [options]
+```
+
+### Commands
+
+| Command | Description |
+|---|---|
+| `start --brief "..."` | Create a topic and start a run in one step |
+| `topic create --brief "..."` | Create a topic without starting a run |
+| `topic list` | List all topics |
+| `run <topic-slug>` | Start a new run for an existing topic |
+| `resume <run-id>` | Continue from where a previous run left off |
+| `list` | List all runs |
+| `status <run-id\|topic-slug>` | Show run or topic details |
+| `logs <run-id>` | Print run log (`--follow` to tail) |
+| `stop <run-id>` | Stop a running research session |
+| `delete <run-id>` | Remove a run |
+| `serve` | Start the web dashboard |
+
+### Flags
+
+| Flag | Description | Default |
+|---|---|---|
+| `--provider` | `claude`, `codex`, or `zai` | `claude` |
+| `--model` | Override the provider's default model | Provider default |
+| `--iterations` | Number of iterations to run | Open-ended (capped at 5) |
+| `--max-minutes` | Hard time ceiling | `30` |
+| `--detach` | Run in the background | Attached |
+| `--json` | Machine-readable JSON output | Human-readable |
+| `--follow` | Tail logs continuously (for `logs`) | One-shot |
+| `--brief-file` | Load brief from a file instead of `--brief` | — |
 
 ## Dashboard
 
 ```bash
-cd tools/deep-research
 npm run serve
+# Open http://127.0.0.1:4310
 ```
 
-Open [http://127.0.0.1:4310](http://127.0.0.1:4310)
+The dashboard provides full feature parity with the CLI:
 
-## Current model
+- **Create topics** and start runs with provider/model/iteration selection
+- **Live monitoring** — real-time status, log streaming via SSE, iteration progress
+- **Evaluation scores** — 9-dimension rubric (depth, accuracy, source quality, etc.) displayed per iteration
+- **File explorer** — browse `report.md`, `sources.md`, iterations, and library files
+- **Run management** — resume, stop, and delete runs
+- **Topic management** — view all topics, delete topics and their runs
 
-- Topics hold durable briefs and group related runs.
-- Topic slug and title are derived automatically from the first non-empty line of the brief.
-- Duplicate slugs fail fast with a clear error so callers can retry with a different brief.
-- Runs are isolated filesystem workspaces, which makes parallel execution safe.
-- Resuming creates a new run from a prior run snapshot instead of mutating history in place.
+### REST API
 
-## Z.AI Provider
+The dashboard exposes a JSON API for programmatic use:
 
-`provider=zai` is implemented by launching `opencode acp` with a generated OpenCode config pinned to Z.AI.
+```bash
+# Create topic + start run
+curl -X POST http://127.0.0.1:4310/api/start \
+  -H "Content-Type: application/json" \
+  -d '{"brief": "Research quantum computing advances", "provider": "claude", "iterations": 3}'
 
-Requirements:
+# Check status
+curl http://127.0.0.1:4310/api/runs/<run-id>
 
-- `opencode` installed and available on `PATH`
-- `ZAI_API_KEY` set in the environment
+# Read the report
+curl http://127.0.0.1:4310/api/runs/<run-id>/file?path=report.md
 
-The generated OpenCode config:
+# List all runs
+curl http://127.0.0.1:4310/api/runs
 
-- enables only the `zai` provider
-- uses `https://api.z.ai/api/coding/paas/v4`
-- injects the API key from `ZAI_API_KEY`
-- defaults to `zai/glm-5` unless `DEEP_RESEARCH_MODEL` is set
+# Stop a run
+curl -X POST http://127.0.0.1:4310/api/runs/<run-id>/stop
 
-## Smoke Tests
+# SSE event stream (live updates)
+curl http://127.0.0.1:4310/api/events
+```
 
-`smoke-test.mjs` runs a real end-to-end check through the CLI:
+## How It Works
 
-- creates a topic from a brief only
-- verifies the derived topic slug
-- launches a one-iteration detached run
-- polls for completion
-- checks `report.md`, `sources.md`, `iterations/001.md`, and a provider-specific `library/*.md`
+### Topics and runs
 
-For `npm run smoke:zai`, `ZAI_API_KEY` must be set.
+A **topic** holds a durable research brief and groups related runs. A **run** is an isolated filesystem workspace where an agent iterates on a report. Multiple runs can target the same topic, and **resuming** creates a new run that copies artifacts from a prior run and continues iteration numbering.
+
+### Iteration loop
+
+Each iteration:
+
+1. Materializes a prompt with the current report state, sources, and prior evaluation feedback
+2. Spawns an ACP agent that reads/writes files in the run directory
+3. The agent improves `report.md`, updates `sources.md`, writes `iterations/NNN.md`
+4. An evaluation judge scores the iteration on 9 dimensions
+5. Weaknesses from the evaluation feed into the next iteration's prompt
+
+### Output artifacts
+
+| File | Description |
+|---|---|
+| `report.md` | The final research report |
+| `sources.md` | Numbered reference list with URLs |
+| `iterations/NNN.md` | Per-iteration log of what the agent did |
+| `library/*.md` | Working documents created by the agent |
+| `evaluations/` | Per-iteration evaluation scores and judge memos |
+
+### Evaluation rubric
+
+The judge scores each iteration on: brief coverage, directness, coherence, citation coverage, source quality, specificity, brevity, uncertainty honesty, and support confidence. A 10th dimension — source resolvability — is computed by HTTP-probing cited URLs.
+
+## Claude Code Skill
+
+Deep Research works as a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill. Clone the repo, symlink it, and invoke with `/deep-research`:
+
+```bash
+git clone https://github.com/recursive-systems/deep-research.git
+cd deep-research && npm install
+ln -s $(pwd) ~/.claude/skills/deep-research
+```
+
+Then in Claude Code:
+
+```
+/deep-research Research the latest advances in autonomous agent architectures
+```
+
+## Environment Variables
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `DEEP_RESEARCH_HOME` | Runtime data directory | `~/.deep-research` |
+| `ZAI_API_KEY` | API key for Z.AI provider | — |
+| `DEEP_RESEARCH_MODEL` | Model override for Z.AI | `zai/glm-5` |
+| `HOST` | Server bind address | `127.0.0.1` |
+| `PORT` | Server port | `4310` |
+
+## Runtime Data
+
+All state lives under `~/.deep-research/` (override with `DEEP_RESEARCH_HOME`):
+
+```
+~/.deep-research/
+├── topics/<slug>/
+│   ├── topic.json
+│   └── brief.md
+├── runs/<run-id>/
+│   ├── run.json
+│   ├── report.md
+│   ├── sources.md
+│   ├── stdout.log
+│   ├── iterations/
+│   ├── library/
+│   └── evaluations/
+└── tmp/
+```
+
+## Development
+
+```bash
+npm test              # Unit tests (vitest)
+npm run lint          # ESLint
+npm run check         # Syntax check all JS files
+npm run format:check  # Prettier check
+```
+
+### Smoke tests
+
+Run end-to-end tests against live providers:
+
+```bash
+npm run smoke:claude    # Test Claude
+npm run smoke:codex     # Test Codex
+npm run smoke:zai       # Test Z.AI (requires ZAI_API_KEY)
+npm run smoke:all       # Test all providers
+```
+
+Each test creates a topic, runs one iteration, and validates the output artifacts.
 
 ## License
 

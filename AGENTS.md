@@ -31,7 +31,7 @@ Always run at minimum `npm run check && npm test && npm run lint` before conside
 
 2. **ACP protocol over stdio.** `acp-runner.js` spawns a provider binary and communicates via ndjson on stdin/stdout using `@agentclientprotocol/sdk`. Do not change the spawn/communication pattern (e.g., do not switch to HTTP or WebSocket).
 
-3. **Filesystem layout is the API contract.** The directory structure under `~/.deep-research/` (topics, runs, iterations, library, evaluations) is read by the CLI, server, dashboard, and the ACP agent itself. Changing paths or filenames is a breaking change. See `ARCHITECTURE.md` for the full layout.
+3. **Filesystem layout is the API contract.** The directory structure under `~/.deep-research/` (topics, runs, iterations, library, evaluations) is read by the CLI, server, dashboard, and the ACP agent itself. Changing paths or filenames is a breaking change.
 
 4. **Pidfile lifecycle.** The worker writes `process.pid` to `run.json` on start and the launcher reads it for `stopRun()`. The pid field must be set before the iteration loop begins and cleared (via status update) on exit.
 
@@ -42,8 +42,6 @@ Always run at minimum `npm run check && npm test && npm run lint` before conside
 7. **Resume chain math.** `topicIterationOffset = base.offset + base.completedIterations`. Iteration numbering must be continuous across resumed runs. Do not change how `createRun` computes the offset.
 
 ## Module responsibilities
-
-See `ARCHITECTURE.md` for the full dependency graph and data model.
 
 | File | Role |
 |---|---|
@@ -122,9 +120,9 @@ See `ARCHITECTURE.md` for the full dependency graph and data model.
 
 ## What NOT to do
 
-- **Do not add a build step for the frontend.** The dashboard uses native ES module imports from a CDN. No webpack, vite, or babel. Edit a `.js` file and refresh the browser. See ADR-3 in `DECISIONS.md`.
-- **Do not switch to a database.** The filesystem-as-database design is intentional. See ADR-2 in `DECISIONS.md`.
+- **Do not add a build step for the frontend.** The dashboard uses native ES module imports from a CDN. No webpack, vite, or babel. Edit a `.js` file and refresh the browser.
+- **Do not switch to a database.** The filesystem-as-database design is intentional — all state is plain files under `~/.deep-research/`, inspectable with `cat`/`ls`.
 - **Do not add authentication or authorization.** This is a local-only tool running on localhost. Adding auth adds complexity with no security benefit.
 - **Do not introduce CommonJS.** The entire project is ESM. No `require()`, no `module.exports`.
-- **Do not bypass the ACP abstraction.** Do not call provider APIs directly. All provider interaction goes through `acp-runner.js` and the ACP protocol. See ADR-1 in `DECISIONS.md`.
+- **Do not bypass the ACP abstraction.** Do not call provider APIs directly. All provider interaction goes through `acp-runner.js` and the ACP protocol.
 - **Do not write JSON metadata files directly.** Always use `writeJson()` from store.js for atomic writes.

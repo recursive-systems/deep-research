@@ -100,11 +100,11 @@ Each iteration:
 
 ### Providers
 
-| Provider | Flag | Binary | Default Model |
+| Provider | Flag | Adapter | Default Model |
 |---|---|---|---|
-| Claude | `--provider claude` | claude-agent-acp | claude-sonnet-4-20250514 |
-| Codex | `--provider codex` | codex-acp | codex-mini-latest |
-| Z.AI | `--provider zai` | opencode acp | zai/glm-5 |
+| Claude | `--provider claude` | claude-agent-acp | sonnet |
+| Codex | `--provider codex` | codex-acp | gpt-5.4 |
+| Z.AI | `--provider zai` | opencode | zai/glm-5 |
 
 ### Runtime Data
 
@@ -156,15 +156,19 @@ Or read it via the REST API: `GET http://127.0.0.1:4310/api/runs/<run-id>/file?p
 
 ## Flags Reference
 
-| Flag | Description | Default |
-|---|---|---|
-| `--provider` | `claude`, `codex`, or `zai` | `claude` |
-| `--model` | Override the provider's default model | Provider default |
-| `--iterations` | Number of iterations to run | Open-ended (capped at 5) |
-| `--max-minutes` | Hard time ceiling | 30 minutes |
-| `--detach` | Run in the background | Attached (blocks terminal) |
-| `--json` | Machine-readable JSON output | Human-readable |
-| `--follow` | Tail logs continuously (for `logs` command) | One-shot |
+| Flag | Applies to | Description | Default |
+|---|---|---|---|
+| `--provider` | `start`, `run`, `resume` | `claude`, `codex`, or `zai` | `claude` |
+| `--model` | `start`, `run`, `resume` | Override the provider's default model | Provider default |
+| `--iterations` | `start`, `run`, `resume` | Number of iterations to run | Open-ended (capped at 5) |
+| `--max-minutes` | `start`, `run`, `resume` | Hard time ceiling | 30 minutes |
+| `--detach` | `start`, `run`, `resume` | Run in the background | Attached |
+| `--brief` | `start`, `topic create` | Research brief as a string | — |
+| `--brief-file` | `start`, `topic create` | Load brief from a file path | — |
+| `--slug` | `start`, `topic create` | Override auto-derived topic slug | Derived from brief |
+| `--title` | `start`, `topic create` | Override auto-derived topic title | Derived from brief |
+| `--json` | All commands | Machine-readable JSON output | Human-readable |
+| `--follow` | `logs` | Tail logs continuously | One-shot |
 
 ## Guidelines
 

@@ -7,154 +7,16 @@
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
-
-    <header class="topbar">
-      <div class="topbar__left">
-        <button class="topbar__back" id="backBtn">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12L6 8l4-4"/></svg>
-          Back
-        </button>
-        <div class="topbar__brand" id="brandBtn">
-          <div class="topbar__icon">DR</div>
-          <div class="topbar__text">
-            <div class="topbar__title">Deep Research</div>
-            <div class="topbar__subtitle">Mission Control</div>
-          </div>
-        </div>
-      </div>
-      <div class="topbar__right">
-        <div class="topbar__pulse">
-          <span class="dot-live"></span>
-          <span>Live</span>
-        </div>
-      </div>
-    </header>
-
-    <!-- ===== LIST VIEW ===== -->
-    <div id="listView" class="view container">
-      <div class="list-header">
-        <div class="list-header__left">
-          <h1>Research</h1>
-          <p id="listSubtitle">Loading...</p>
-        </div>
-        <div class="list-header__actions">
-          <button class="btn btn--ghost btn--sm" id="refreshBtn">Refresh</button>
-          <button class="btn btn--primary" id="newBtn">+ New Research</button>
-        </div>
-      </div>
-
-      <div class="stats-row">
-        <div class="stat-cell">
-          <div class="stat-cell__label">Research</div>
-          <div class="stat-cell__value" id="statTopics">-</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-cell__label">Total Runs</div>
-          <div class="stat-cell__value" id="statRuns">-</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-cell__label">Active</div>
-          <div class="stat-cell__value stat-cell__value--amber" id="statActive">-</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-cell__label">Completed</div>
-          <div class="stat-cell__value stat-cell__value--green" id="statCompleted">-</div>
-        </div>
-      </div>
-
-      <div id="researchList"></div>
-    </div>
-
-    <!-- ===== DETAIL VIEW ===== -->
-    <div id="detailView" class="view view--hidden container"></div>
-
-    <!-- ===== NEW RESEARCH MODAL ===== -->
-    <div class="modal-backdrop hidden" id="modal">
-      <div class="modal">
-        <div class="modal__header">
-          <span class="modal__title">New Research</span>
-          <button class="modal__close" id="modalCloseBtn">&times;</button>
-        </div>
-        <form id="newForm">
-          <div class="form-group">
-            <label class="form-label" for="newBrief">Research Brief</label>
-            <textarea id="newBrief" rows="5" placeholder="Describe what you want to research..." required></textarea>
-            <div class="form-hint">The first line becomes the research name.</div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="newProvider">Provider</label>
-              <select id="newProvider">
-                <option value="claude">Claude</option>
-                <option value="codex">Codex</option>
-                <option value="zai">Z.AI</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="newModel">Model</label>
-              <input id="newModel" placeholder="auto">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="newIterations">Iterations</label>
-              <input id="newIterations" type="number" min="1" placeholder="blank = no limit">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="newMaxMinutes">Timeout (min)</label>
-              <input id="newMaxMinutes" type="number" min="1" placeholder="blank = no limit">
-            </div>
-          </div>
-          <div class="modal__footer">
-            <button type="button" class="btn btn--ghost" id="modalCancelBtn">Cancel</button>
-            <button type="submit" class="btn btn--primary" id="newSubmitBtn">Launch</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- ===== RERUN MODAL ===== -->
-    <div class="modal-backdrop hidden" id="rerunModal">
-      <div class="modal">
-        <div class="modal__header">
-          <span class="modal__title" id="rerunModalTitle">Rerun Research</span>
-          <button class="modal__close" id="rerunModalCloseBtn">&times;</button>
-        </div>
-        <form id="rerunForm">
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="rerunProvider">Provider</label>
-              <select id="rerunProvider">
-                <option value="claude">Claude</option>
-                <option value="codex">Codex</option>
-                <option value="zai">Z.AI</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="rerunModel">Model</label>
-              <input id="rerunModel" placeholder="auto">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="rerunIterations">Iterations</label>
-              <input id="rerunIterations" type="number" min="1" placeholder="blank = no limit">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="rerunMaxMinutes">Timeout (min)</label>
-              <input id="rerunMaxMinutes" type="number" min="1" placeholder="blank = no limit">
-            </div>
-          </div>
-          <input type="hidden" id="rerunTopicSlug">
-          <input type="hidden" id="rerunBaseRunId">
-          <div class="modal__footer">
-            <button type="button" class="btn btn--ghost" id="rerunCancelBtn">Cancel</button>
-            <button type="submit" class="btn btn--primary" id="rerunSubmitBtn">Launch</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
+    <div id="app"></div>
+    <script type="importmap">
+    {
+      "imports": {
+        "preact": "https://esm.sh/preact@10.25.4",
+        "preact/hooks": "https://esm.sh/preact@10.25.4/hooks",
+        "htm": "https://esm.sh/htm@3.1.1"
+      }
+    }
+    </script>
     <script src="/app.js" type="module"></script>
   </body>
 </html>

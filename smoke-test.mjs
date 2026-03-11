@@ -164,13 +164,16 @@ async function verifyRun(provider, run) {
   const reportPath = path.join(run.runDir, 'report.md');
   const sourcesPath = path.join(run.runDir, 'sources.md');
   const iterationPath = path.join(run.runDir, 'iterations', '001.md');
+  const evaluationsTracePath = path.join(run.runDir, 'evaluations.ndjson');
+  const evaluationsDir = path.join(run.runDir, 'evaluations');
   const libraryEntries = await fs.readdir(path.join(run.runDir, 'library'));
   const libraryFiles = libraryEntries.filter((entry) => entry.endsWith('.md'));
 
-  const [report, sources, iteration] = await Promise.all([
+  const [report, sources, iteration, evaluationsTraceRaw] = await Promise.all([
     fs.readFile(reportPath, 'utf8'),
     fs.readFile(sourcesPath, 'utf8'),
     fs.readFile(iterationPath, 'utf8'),
+    fs.readFile(evaluationsTracePath, 'utf8'),
   ]);
 
   if (libraryFiles.length === 0) {
@@ -179,6 +182,15 @@ async function verifyRun(provider, run) {
 
   const libraryPath = path.join(run.runDir, 'library', libraryFiles[0]);
   const library = await fs.readFile(libraryPath, 'utf8');
+  const evaluations = evaluationsTraceRaw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  const latestEvaluation = evaluations[evaluations.length - 1] || null;
+  const evaluationEntries = await fs.readdir(evaluationsDir);
+  const evaluationJsonFiles = evaluationEntries.filter((entry) => entry.endsWith('.json'));
+  const evaluationMarkdownFiles = evaluationEntries.filter((entry) => entry.endsWith('.md'));
 
   const checks = [
     ['completed status', run.status === 'completed'],
@@ -187,6 +199,16 @@ async function verifyRun(provider, run) {
     ['expected source line', sources.includes('1. Internal smoke test - no external sources.')],
     ['iteration heading', iteration.includes('# Iteration 1')],
     ['provider mentioned in library', library.toLowerCase().includes(provider)],
+    ['evaluation trace written', evaluations.length >= 1],
+    ['evaluation iteration recorded', latestEvaluation?.iteration === 1],
+    ['evaluation overall score present', Number.isFinite(Number(latestEvaluation?.overall))],
+    ['evaluation model overall present', Number.isFinite(Number(latestEvaluation?.modelOverall))],
+    ['evaluation provider matches run', latestEvaluation?.provider === run.provider],
+    ['evaluation model matches run', latestEvaluation?.model === run.model],
+    ['evaluation uncertainty score present', Number.isFinite(Number(latestEvaluation?.scores?.uncertainty_honesty))],
+    ['evaluation source resolvability score present', Number.isFinite(Number(latestEvaluation?.scores?.source_resolvability))],
+    ['evaluation json artifact written', evaluationJsonFiles.length >= 1],
+    ['evaluation markdown artifact written', evaluationMarkdownFiles.length >= 1],
   ];
 
   const failures = checks.filter(([, ok]) => !ok).map(([label]) => label);
@@ -198,6 +220,7 @@ async function verifyRun(provider, run) {
     report,
     sources,
     iteration,
+    evaluations,
     libraryPath,
     library,
   };

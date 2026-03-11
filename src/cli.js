@@ -2,7 +2,18 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createTopic, createRun, deleteRun, ensureStore, ensureTopic, listRuns, listTopics, readRun, readRunLog, readTopic } from './core/store.js';
+import {
+  createTopic,
+  createRun,
+  deleteRun,
+  ensureStore,
+  ensureTopic,
+  listRuns,
+  listTopics,
+  readRun,
+  readRunLog,
+  readTopic,
+} from './core/store.js';
 import { getRuntimeHome } from './core/config.js';
 import { launchRunAttached, launchRunDetached, stopRun } from './core/launcher.js';
 
@@ -200,7 +211,9 @@ async function runList(flags) {
     return;
   }
   for (const run of runs) {
-    process.stdout.write(`${run.id}\t${run.topicSlug}\t${run.status}\t${formatIterations(run)}\ttopic=${formatTopicIterations(run)}\n`);
+    process.stdout.write(
+      `${run.id}\t${run.topicSlug}\t${run.status}\t${formatIterations(run)}\ttopic=${formatTopicIterations(run)}\n`
+    );
   }
 }
 
@@ -216,7 +229,9 @@ async function runStatus(positionals, flags) {
       return;
     }
     process.stdout.write(`${run.id}\n`);
-    process.stdout.write(`topic: ${run.topicSlug}\nstatus: ${run.status}\niterations: ${formatIterations(run)}\ntopicIterations: ${formatTopicIterations(run)}\nprovider: ${run.provider}\nmodel: ${run.model || '-'}\n`);
+    process.stdout.write(
+      `topic: ${run.topicSlug}\nstatus: ${run.status}\niterations: ${formatIterations(run)}\ntopicIterations: ${formatTopicIterations(run)}\nprovider: ${run.provider}\nmodel: ${run.model || '-'}\n`
+    );
     return;
   }
 
@@ -237,11 +252,23 @@ async function runLogs(positionals, flags) {
   if (!runId) {
     throw new Error('Missing run id');
   }
+
+  if (flags.json && !flags.follow) {
+    const logs = await readRunLog(runId);
+    printJson({ runId, logs });
+    return;
+  }
+
   let previous = '';
   while (true) {
     const current = await readRunLog(runId);
     if (current !== previous) {
-      process.stdout.write(current.slice(previous.length));
+      const chunk = current.slice(previous.length);
+      if (flags.json) {
+        process.stdout.write(`${JSON.stringify({ runId, chunk })}\n`);
+      } else {
+        process.stdout.write(chunk);
+      }
       previous = current;
     }
     if (!flags.follow) {
@@ -363,6 +390,10 @@ async function main() {
 }
 
 main().catch((error) => {
-  process.stderr.write(`${error.message}\n`);
+  if (process.argv.includes('--json')) {
+    process.stderr.write(`${JSON.stringify({ error: error.message })}\n`);
+  } else {
+    process.stderr.write(`${error.message}\n`);
+  }
   process.exit(1);
 });

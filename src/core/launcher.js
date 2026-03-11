@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readRun, updateRun } from './store.js';
@@ -24,10 +25,14 @@ export async function launchRunDetached(runId, env = process.env) {
   });
   child.unref();
 
-  const next = await updateRun(runId, () => ({
-    status: 'queued',
-    pid: child.pid,
-  }), env);
+  const next = await updateRun(
+    runId,
+    () => ({
+      status: 'queued',
+      pid: child.pid,
+    }),
+    env
+  );
 
   return { run: next, pid: child.pid };
 }
@@ -66,6 +71,45 @@ export async function stopRun(runId, env = process.env) {
   }
   if (run.status !== 'running' && run.status !== 'queued') {
     throw new Error(`Run is not active: ${runId}`);
+  }
+
+  const pidfile = path.join(run.runDir, 'worker.pid');
+  let pidfileContent;
+  try {
+    pidfileContent = fsSync.readFileSync(pidfile, 'utf8').trim();
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      // Pidfile gone — worker already exited.
+      const updated = await updateRun(
+        runId,
+        () => ({
+          status: 'stopped',
+          endedAt: new Date().toISOString(),
+          exitCode: 0,
+        }),
+        env
+      );
+      return updated;
+    }
+    // Other errors (EACCES, EIO, etc.) — log and fall through to kill by run.pid
+    console.error(`[stopRun] Failed to read pidfile for ${runId}: ${err.message}`);
+  }
+
+  if (Number(pidfileContent) !== run.pid) {
+    console.error(
+      `[stopRun] PID mismatch for ${runId}: pidfile=${pidfileContent}, run.json=${run.pid} — skipping SIGTERM`
+    );
+    const updated = await updateRun(
+      runId,
+      () => ({
+        status: 'stopped',
+        endedAt: new Date().toISOString(),
+        error: 'PID mismatch — worker may have already exited',
+        errorKind: 'pid_mismatch',
+      }),
+      env
+    );
+    return updated;
   }
 
   process.kill(run.pid, 'SIGTERM');

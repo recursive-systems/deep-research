@@ -6,6 +6,14 @@ Your run directory is: `{{OUTPUT_DIR}}`
 
 Your iteration log file for this iteration is: `{{OUTPUT_DIR}}/iterations/{{ITERATION_PADDED}}.md`
 
+{{#if PRIOR_EVAL}}
+## Prior Iteration Feedback
+
+{{PRIOR_EVAL}}
+
+Review the feedback above. Prioritize addressing identified weaknesses before exploring new areas.
+{{/if PRIOR_EVAL}}
+
 ## Instructions
 
 1. Read your state files:

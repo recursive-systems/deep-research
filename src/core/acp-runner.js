@@ -6,7 +6,9 @@ import * as acp from '@agentclientprotocol/sdk';
 import { PACKAGE_ROOT, PROVIDER_BINARIES } from './config.js';
 
 function normalizeProvider(value) {
-  const provider = String(value || 'claude').trim().toLowerCase();
+  const provider = String(value || 'claude')
+    .trim()
+    .toLowerCase();
   if (!Object.hasOwn(PROVIDER_BINARIES, provider)) {
     throw new Error(`Unsupported ACP provider: ${provider}`);
   }
@@ -18,9 +20,10 @@ async function resolveAgentCommand(provider, desiredModel = '') {
     return resolveZaiCommand(desiredModel);
   }
 
-  const binary = process.platform === 'win32'
-    ? `${PROVIDER_BINARIES[provider].adapter}.cmd`
-    : PROVIDER_BINARIES[provider].adapter;
+  const binary =
+    process.platform === 'win32'
+      ? `${PROVIDER_BINARIES[provider].adapter}.cmd`
+      : PROVIDER_BINARIES[provider].adapter;
   const localBinary = path.join(PACKAGE_ROOT, 'node_modules', '.bin', binary);
 
   try {
@@ -46,7 +49,9 @@ async function resolveZaiCommand(desiredModel) {
 
 export function zaiConfigFilePath(desiredModel) {
   const tmpRoot = process.env.DEEP_RESEARCH_TMP_ROOT || path.join(PACKAGE_ROOT, '.tmp');
-  const suffix = Buffer.from(String(desiredModel || 'default')).toString('base64url').slice(0, 24);
+  const suffix = Buffer.from(String(desiredModel || 'default'))
+    .toString('base64url')
+    .slice(0, 24);
   return path.join(tmpRoot, `zai-opencode-${process.pid}-${suffix}.json`);
 }
 
@@ -115,7 +120,7 @@ function flattenConfigOptions(options) {
     });
 }
 
-function scoreMatch(desired, ...candidates) {
+export function scoreMatch(desired, ...candidates) {
   const normalized = desired.trim().toLowerCase();
   let best = 0;
 
@@ -161,9 +166,10 @@ async function maybeSelectModel(connection, sessionResult, desiredModel, log) {
     .map(({ option, value }) => ({
       option,
       value,
-      score: option.category === 'model'
-        ? scoreMatch(desiredModel, value.value, value.name, value.description)
-        : 0,
+      score:
+        option.category === 'model'
+          ? scoreMatch(desiredModel, value.value, value.name, value.description)
+          : 0,
     }))
     .sort((a, b) => b.score - a.score)[0];
 
@@ -208,6 +214,20 @@ function formatAcpError(error) {
   return parts.join(' | ') || String(error);
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientStartupError(message) {
+  const text = String(message || '').toLowerCase();
+  return (
+    text.includes('query closed before response received') ||
+    text.includes('acp session start failed') ||
+    text.includes('acp initialize failed') ||
+    text.includes('connection reset by peer')
+  );
+}
+
 function forwardStderr(stream, log) {
   let buffer = '';
   stream.setEncoding('utf8');
@@ -242,7 +262,9 @@ class ResearchClient {
       return { outcome: { outcome: 'cancelled' } };
     }
 
-    this.log(`[acp] permission ${selection.kind}: ${params.toolCall.title || params.toolCall.toolCallId}`);
+    this.log(
+      `[acp] permission ${selection.kind}: ${params.toolCall.title || params.toolCall.toolCallId}`
+    );
     return {
       outcome: {
         outcome: 'selected',
@@ -269,7 +291,9 @@ class ResearchClient {
         this.log(`[acp] tool ${update.status}: ${update.toolCallId}`);
         break;
       case 'plan':
-        this.log(`[acp] plan: ${update.entries.map((entry) => `${entry.status}:${entry.content}`).join(' | ')}`);
+        this.log(
+          `[acp] plan: ${update.entries.map((entry) => `${entry.status}:${entry.content}`).join(' | ')}`
+        );
         break;
       case 'current_mode_update':
         this.log(`[acp] mode: ${update.modeId}`);
@@ -312,118 +336,129 @@ export async function runAcpIteration({
 }) {
   const normalizedProvider = normalizeProvider(provider);
   const agentCommand = await resolveAgentCommand(normalizedProvider, model);
-  let abortError = null;
-  let abortRun = null;
-  const abortPromise = new Promise((_, reject) => {
-    abortRun = () => {
-      if (abortError) return;
-      abortError = new Error('Run stopped during ACP iteration');
-      reject(abortError);
+  const maxAttempts = normalizedProvider === 'claude' ? 2 : 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let abortError = null;
+    let abortRun = null;
+    const abortPromise = new Promise((_, reject) => {
+      abortRun = () => {
+        if (abortError) return;
+        abortError = new Error('Run stopped during ACP iteration');
+        reject(abortError);
+      };
+    });
+    const child = spawn(agentCommand.command, agentCommand.args, {
+      cwd: PACKAGE_ROOT,
+      env: agentCommand.env || process.env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    forwardStderr(child.stderr, log);
+
+    const stopChild = () => {
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        return;
+      }
     };
-  });
-  const child = spawn(agentCommand.command, agentCommand.args, {
-    cwd: PACKAGE_ROOT,
-    env: agentCommand.env || process.env,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
-  forwardStderr(child.stderr, log);
+    registerAbort(() => {
+      stopChild();
+      abortRun();
+    });
 
-  const stopChild = () => {
-    try {
-      child.kill('SIGTERM');
-    } catch {
-      return;
-    }
-  };
-  registerAbort(() => {
-    stopChild();
-    abortRun();
-  });
-
-  const stream = acp.ndJsonStream(
-    Writable.toWeb(child.stdin),
-    Readable.toWeb(child.stdout),
-  );
-  const client = new ResearchClient([outputDir], log);
-  const connection = new acp.ClientSideConnection(() => client, stream);
-
-  if (shouldStop()) {
-    stopChild();
-    throw new Error('Run stopped before ACP session started');
-  }
-
-  try {
-    let init;
-    try {
-      init = await connection.initialize({
-        protocolVersion: acp.PROTOCOL_VERSION,
-        clientInfo: {
-          name: '@recursive-systems/deep-research',
-          title: 'Deep Research',
-          version: '0.1.0',
-        },
-        clientCapabilities: {
-          fs: {
-            readTextFile: true,
-            writeTextFile: true,
-          },
-        },
-      });
-    } catch (error) {
-      throw new Error(`ACP initialize failed: ${formatAcpError(error)}`);
-    }
-
-    log(`[acp] connected to ${normalizedProvider} (protocol v${init.protocolVersion})`);
-
-    let session;
-    try {
-      session = await connection.newSession({
-        cwd: outputDir,
-        mcpServers: [],
-      });
-    } catch (error) {
-      throw new Error(`ACP session start failed: ${formatAcpError(error)}`);
-    }
+    const stream = acp.ndJsonStream(Writable.toWeb(child.stdin), Readable.toWeb(child.stdout));
+    const client = new ResearchClient([outputDir], log);
+    const connection = new acp.ClientSideConnection(() => client, stream);
 
     if (shouldStop()) {
       stopChild();
-      throw new Error('Run stopped before prompt execution');
+      throw new Error('Run stopped before ACP session started');
     }
 
-    if (shouldSelectModelViaAcp(normalizedProvider)) {
-      try {
-        await maybeSelectModel(connection, session, model, log);
-      } catch (error) {
-        throw new Error(`ACP model selection failed: ${formatAcpError(error)}`);
-      }
-    }
-
-    let result;
     try {
-      result = await Promise.race([
-        connection.prompt({
-          sessionId: session.sessionId,
-          prompt: [
-            {
-              type: 'text',
-              text: promptText,
+      let init;
+      try {
+        init = await connection.initialize({
+          protocolVersion: acp.PROTOCOL_VERSION,
+          clientInfo: {
+            name: '@recursive-systems/deep-research',
+            title: 'Deep Research',
+            version: '0.1.0',
+          },
+          clientCapabilities: {
+            fs: {
+              readTextFile: true,
+              writeTextFile: true,
             },
-          ],
-        }),
-        abortPromise,
-      ]);
+          },
+        });
+      } catch (error) {
+        throw new Error(`ACP initialize failed: ${formatAcpError(error)}`);
+      }
+
+      log(`[acp] connected to ${normalizedProvider} (protocol v${init.protocolVersion})`);
+
+      let session;
+      try {
+        session = await connection.newSession({
+          cwd: outputDir,
+          mcpServers: [],
+        });
+      } catch (error) {
+        throw new Error(`ACP session start failed: ${formatAcpError(error)}`);
+      }
+
+      if (shouldStop()) {
+        stopChild();
+        throw new Error('Run stopped before prompt execution');
+      }
+
+      if (shouldSelectModelViaAcp(normalizedProvider)) {
+        try {
+          await maybeSelectModel(connection, session, model, log);
+        } catch (error) {
+          throw new Error(`ACP model selection failed: ${formatAcpError(error)}`);
+        }
+      }
+
+      let result;
+      try {
+        result = await Promise.race([
+          connection.prompt({
+            sessionId: session.sessionId,
+            prompt: [
+              {
+                type: 'text',
+                text: promptText,
+              },
+            ],
+          }),
+          abortPromise,
+        ]);
+      } catch (error) {
+        throw new Error(`ACP prompt failed: ${formatAcpError(error)}`);
+      }
+
+      log(`[acp] stop reason: ${result.stopReason}`);
+
+      if (result.stopReason !== 'end_turn') {
+        throw new Error(`Agent stopped with ${result.stopReason}`);
+      }
+      return;
     } catch (error) {
-      throw new Error(`ACP prompt failed: ${formatAcpError(error)}`);
+      const canRetry = attempt < maxAttempts && isTransientStartupError(error.message);
+      if (!canRetry) {
+        throw error;
+      }
+      log(
+        `[acp] transient startup failure, retrying (${attempt}/${maxAttempts}): ${error.message}`
+      );
+      await sleep(750 * attempt);
+    } finally {
+      registerAbort(null);
+      stopChild();
+      await connection.closed.catch(() => {});
     }
-
-    log(`[acp] stop reason: ${result.stopReason}`);
-
-    if (result.stopReason !== 'end_turn') {
-      throw new Error(`Agent stopped with ${result.stopReason}`);
-    }
-  } finally {
-    registerAbort(null);
-    stopChild();
-    await connection.closed.catch(() => {});
   }
 }

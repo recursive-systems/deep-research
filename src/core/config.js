@@ -30,6 +30,9 @@ export const PROVIDER_DEFAULT_MODELS = {
   zai: 'zai/glm-5',
 };
 
+export const MAX_OPEN_ENDED_ITERATIONS = 5;
+export const MAX_OPEN_ENDED_MINUTES = 30;
+
 export const PROVIDER_BINARIES = {
   claude: {
     adapter: 'claude-agent-acp',

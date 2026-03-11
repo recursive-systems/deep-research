@@ -8,19 +8,30 @@
     "deep-research": "./src/cli.js"
   },
   "scripts": {
-    "check": "node --check src/cli.js && node --check src/core/acp-runner.js && node --check src/core/config.js && node --check src/core/launcher.js && node --check src/core/prompt.js && node --check src/core/store.js && node --check src/core/worker.js && node --check src/server/server.js && node --check public/app.js && node --check smoke-test.mjs",
+    "check": "find src public -name '*.js' -o -name '*.mjs' | xargs -I{} node --check {} && node --check smoke-test.mjs",
     "smoke": "node smoke-test.mjs",
     "smoke:claude": "node smoke-test.mjs --provider claude",
     "smoke:codex": "node smoke-test.mjs --provider codex",
     "smoke:zai": "node smoke-test.mjs --provider zai",
     "smoke:all": "node smoke-test.mjs --provider all",
     "start": "node src/server/server.js",
-    "serve": "node src/server/server.js"
+    "serve": "node src/server/server.js",
+    "lint": "eslint src/ public/",
+    "format": "prettier --write 'src/**/*.js' 'public/**/*.js'",
+    "format:check": "prettier --check 'src/**/*.js' 'public/**/*.js'",
+    "test": "vitest run"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.15.0",
     "@zed-industries/claude-agent-acp": "^0.21.0",
     "@zed-industries/codex-acp": "^0.9.5",
     "opencode-ai": "^1.2.24"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "prettier": "^3.0.0",
+    "vitest": "^4.0.18"
   }
 }
